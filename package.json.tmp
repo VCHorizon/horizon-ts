@@ -1,0 +1,12 @@
+{
+  "name": "horizon-ts",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "dev:server": "nodemon --watch server --exec ts-node server/index.ts",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  }
+}
