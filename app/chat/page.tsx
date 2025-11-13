@@ -102,7 +102,7 @@ export default function ChatPage() {
     socket.on('user:joined', (data: { username: string; timestamp: string }) => {
       // Add system message when user joins
       setMessages((prev) => [...prev, {
-        id: `system-${Date.now()}`,
+        id: `system-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
         username: 'System',
         text: `${data.username} joined the chat`,
         timestamp: data.timestamp,
