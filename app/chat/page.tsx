@@ -4,11 +4,17 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useUsername } from "../context/UsernameContext";
 
+interface Message {
+  username: string;
+  text: string;
+  timestamp: Date;
+}
+
 export default function ChatPage() {
   const { username, clearUsername } = useUsername();
   const router = useRouter();
   const [message, setMessage] = useState("");
-  const [messages, setMessages] = useState<Array<{ username: string; text: string; timestamp: Date }>>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
 
   // Redirect to welcome if no username
   useEffect(() => {
