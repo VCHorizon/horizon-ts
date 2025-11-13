@@ -126,6 +126,7 @@ io.on('connection', (socket) => {
       io.emit('message:edit:update', {
         messageId: payload.messageId,
         newText: payload.newText,
+        isEdited: true,
       });
     }
   });
