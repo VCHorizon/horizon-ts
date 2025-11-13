@@ -76,9 +76,8 @@ io.on('connection', (socket) => {
       
       if (existingReaction) {
         // Toggle: if user already reacted, remove them; otherwise add them
-        const userIndex = existingReaction.users.indexOf(payload.username);
-        if (userIndex > -1) {
-          existingReaction.users.splice(userIndex, 1);
+        if (existingReaction.users.includes(payload.username)) {
+          existingReaction.users = existingReaction.users.filter(u => u !== payload.username);
           // Remove reaction if no users left
           if (existingReaction.users.length === 0) {
             message.reactions = message.reactions.filter(r => r.emoji !== payload.emoji);
