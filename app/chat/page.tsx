@@ -33,6 +33,7 @@ export default function ChatPage() {
   useEffect(() => {
     if (!username) {
       router.push("/welcome");
+      return;
     }
   }, [username, router]);
 
@@ -41,7 +42,11 @@ export default function ChatPage() {
     if (!username) return;
 
     const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3001';
-    const socket = io(socketUrl);
+    const socket = io(socketUrl, {
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionAttempts: 5
+    });
     socketRef.current = socket;
 
     socket.on('connect', () => {
@@ -54,6 +59,21 @@ export default function ChatPage() {
     socket.on('disconnect', () => {
       console.log('Disconnected from WebSocket server');
       setIsConnected(false);
+    });
+
+    socket.on('connect_error', (error) => {
+      console.error('Connection error:', error);
+      setIsConnected(false);
+    });
+
+    socket.on('reconnect_attempt', () => {
+      console.log('Attempting to reconnect...');
+    });
+
+    socket.on('reconnect', () => {
+      console.log('Reconnected successfully');
+      setIsConnected(true);
+      socket.emit('user:joined', { username });
     });
 
     socket.on('chat:message', (msg: Message) => {
@@ -130,6 +150,12 @@ export default function ChatPage() {
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto p-4">
         <div className="max-w-4xl mx-auto space-y-4">
+          {!isConnected && (
+            <div className="bg-yellow-100 dark:bg-yellow-900 border border-yellow-400 dark:border-yellow-600 text-yellow-800 dark:text-yellow-200 px-4 py-3 rounded mb-4">
+              <p className="font-semibold">⚠️ Not connected to chat server</p>
+              <p className="text-sm">Make sure the WebSocket server is running with: <code className="bg-yellow-200 dark:bg-yellow-800 px-1 rounded">npm run dev:server</code></p>
+            </div>
+          )}
           {messages.length === 0 ? (
             <div className="text-center text-gray-500 dark:text-gray-400 mt-8">
               <p className="text-lg">No messages yet. Start the conversation!</p>
