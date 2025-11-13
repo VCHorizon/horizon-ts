@@ -13,9 +13,39 @@ const io = new Server(httpServer, {
 
 const PORT = process.env.PORT || 3001;
 
+interface ChatMessage {
+  username: string;
+  text: string;
+  timestamp: string;
+}
+
+interface UserJoinedPayload {
+  username: string;
+}
+
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
   
+  // Handle user joining
+  socket.on('user:joined', (data: UserJoinedPayload) => {
+    console.log(`${data.username} joined the chat`);
+    socket.broadcast.emit('user:joined', {
+      username: data.username,
+      timestamp: new Date().toISOString(),
+    });
+  });
+  
+  // Handle chat messages
+  socket.on('chat:message', (message: ChatMessage) => {
+    console.log('Message received:', message);
+    // Broadcast to all clients including sender
+    io.emit('chat:message', {
+      ...message,
+      timestamp: new Date().toISOString(),
+    });
+  });
+  
+  // Handle user disconnect
   socket.on('disconnect', () => {
     console.log('User disconnected:', socket.id);
   });
