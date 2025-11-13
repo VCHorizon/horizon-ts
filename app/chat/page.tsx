@@ -77,10 +77,7 @@ export default function ChatPage() {
     });
 
     socket.on('chat:message', (msg: Message) => {
-      setMessages((prev) => [...prev, {
-        ...msg,
-        timestamp: msg.timestamp
-      }]);
+      setMessages((prev) => [...prev, msg]);
     });
 
     socket.on('user:joined', (data: { username: string; timestamp: string }) => {
