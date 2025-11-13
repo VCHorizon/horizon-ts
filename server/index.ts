@@ -24,6 +24,7 @@ interface ChatMessage {
   text: string;
   timestamp: string;
   reactions: Reaction[];
+  isEdited?: boolean;
 }
 
 interface UserJoinedPayload {
@@ -33,6 +34,17 @@ interface UserJoinedPayload {
 interface ReactionPayload {
   messageId: string;
   emoji: string;
+  username: string;
+}
+
+interface EditMessagePayload {
+  messageId: string;
+  newText: string;
+  username: string;
+}
+
+interface DeleteMessagePayload {
+  messageId: string;
   username: string;
 }
 
@@ -97,6 +109,38 @@ io.on('connection', (socket) => {
       io.emit('message:reaction:update', {
         messageId: payload.messageId,
         reactions: message.reactions,
+      });
+    }
+  });
+  
+  // Handle message edit
+  socket.on('message:edit', (payload: EditMessagePayload) => {
+    console.log('Edit message:', payload);
+    const message = messages.get(payload.messageId);
+    
+    if (message && message.username === payload.username) {
+      message.text = payload.newText;
+      message.isEdited = true;
+      
+      // Broadcast updated message to all clients
+      io.emit('message:edit:update', {
+        messageId: payload.messageId,
+        newText: payload.newText,
+      });
+    }
+  });
+  
+  // Handle message delete
+  socket.on('message:delete', (payload: DeleteMessagePayload) => {
+    console.log('Delete message:', payload);
+    const message = messages.get(payload.messageId);
+    
+    if (message && message.username === payload.username) {
+      messages.delete(payload.messageId);
+      
+      // Broadcast deletion to all clients
+      io.emit('message:delete:update', {
+        messageId: payload.messageId,
       });
     }
   });
