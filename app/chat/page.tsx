@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useUsername } from "../context/UsernameContext";
 import { io, Socket } from "socket.io-client";
+import EmojiPicker from "../components/EmojiPicker";
 
 interface Reaction {
   emoji: string;
@@ -16,6 +17,7 @@ interface Message {
   text: string;
   timestamp: string;
   reactions: Reaction[];
+  isEdited?: boolean;
 }
 
 export default function ChatPage() {
@@ -24,8 +26,13 @@ export default function ChatPage() {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [isConnected, setIsConnected] = useState(false);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const socketRef = useRef<Socket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const emojiButtonRef = useRef<HTMLButtonElement>(null);
 
   // Auto-scroll to bottom when new messages arrive
   const scrollToBottom = () => {
@@ -99,6 +106,30 @@ export default function ChatPage() {
       );
     });
 
+    socket.on('message:edit:update', (data: { messageId: string; newText: string }) => {
+      setMessages((prev) =>
+        prev.map(msg =>
+          msg.id === data.messageId
+            ? { ...msg, text: data.newText, isEdited: true }
+            : msg
+        )
+      );
+      // Clear editing state if this was being edited
+      if (editingMessageId === data.messageId) {
+        setEditingMessageId(null);
+        setEditText('');
+      }
+    });
+
+    socket.on('message:delete:update', (data: { messageId: string }) => {
+      setMessages((prev) => prev.filter(msg => msg.id !== data.messageId));
+      // Clear editing state if this was being edited
+      if (editingMessageId === data.messageId) {
+        setEditingMessageId(null);
+        setEditText('');
+      }
+    });
+
     socket.on('user:joined', (data: { username: string; timestamp: string }) => {
       // Add system message when user joins
       setMessages((prev) => [...prev, {
@@ -139,6 +170,47 @@ export default function ChatPage() {
     }
     clearUsername();
     router.push("/welcome");
+  };
+
+  const handleReaction = (messageId: string, emoji: string) => {
+    if (socketRef.current?.connected && username) {
+      socketRef.current.emit('message:reaction', {
+        messageId,
+        emoji,
+        username
+      });
+    }
+  };
+
+  const handleStartEdit = (msg: Message) => {
+    setEditingMessageId(msg.id);
+    setEditText(msg.text);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingMessageId(null);
+    setEditText('');
+  };
+
+  const handleSaveEdit = (messageId: string) => {
+    if (editText.trim() && socketRef.current?.connected && username) {
+      socketRef.current.emit('message:edit', {
+        messageId,
+        newText: editText.trim(),
+        username
+      });
+    }
+  };
+
+  const handleDelete = (messageId: string) => {
+    if (window.confirm('Are you sure you want to delete this message?')) {
+      if (socketRef.current?.connected && username) {
+        socketRef.current.emit('message:delete', {
+          messageId,
+          username
+        });
+      }
+    }
   };
 
   const handleEmojiSelect = (emoji: string) => {
@@ -207,28 +279,92 @@ export default function ChatPage() {
                 key={msg.id || index}
                 className={`flex ${msg.username === username ? "justify-end" : msg.username === 'System' ? "justify-center" : "justify-start"}`}
               >
-                <div className="flex flex-col">
-                  <div
-                    className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                      msg.username === 'System'
-                        ? "bg-gray-300 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm italic"
-                        : msg.username === username
-                        ? "bg-indigo-600 text-white"
-                        : "bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                    }`}
-                  >
-                    {msg.username !== 'System' && (
-                      <p className="text-xs font-semibold mb-1 opacity-75">
-                        {msg.username}
-                      </p>
+                <div className="flex flex-col group">
+                  <div className="relative">
+                    <div
+                      className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                        msg.username === 'System'
+                          ? "bg-gray-300 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm italic"
+                          : msg.username === username
+                          ? "bg-indigo-600 text-white"
+                          : "bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                      }`}
+                    >
+                      {msg.username !== 'System' && (
+                        <p className="text-xs font-semibold mb-1 opacity-75">
+                          {msg.username}
+                        </p>
+                      )}
+                      
+                      {/* Message text or edit input */}
+                      {editingMessageId === msg.id ? (
+                        <div className="space-y-2">
+                          <input
+                            type="text"
+                            value={editText}
+                            onChange={(e) => setEditText(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                handleSaveEdit(msg.id);
+                              } else if (e.key === 'Escape') {
+                                handleCancelEdit();
+                              }
+                            }}
+                            className="w-full px-2 py-1 border rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                            autoFocus
+                          />
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleSaveEdit(msg.id)}
+                              className="text-xs px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600"
+                            >
+                              Save
+                            </button>
+                            <button
+                              onClick={handleCancelEdit}
+                              className="text-xs px-2 py-1 bg-gray-500 text-white rounded hover:bg-gray-600"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <p className="break-words">
+                            {msg.text}
+                            {msg.isEdited && (
+                              <span className="text-xs opacity-60 ml-2">(edited)</span>
+                            )}
+                          </p>
+                          <p className="text-xs opacity-60 mt-1">
+                            {new Date(msg.timestamp).toLocaleTimeString([], { 
+                              hour: '2-digit', 
+                              minute: '2-digit' 
+                            })}
+                          </p>
+                        </>
+                      )}
+                    </div>
+                    
+                    {/* Edit/Delete buttons for own messages */}
+                    {msg.username === username && msg.username !== 'System' && editingMessageId !== msg.id && (
+                      <div className="absolute -right-16 top-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                        <button
+                          onClick={() => handleStartEdit(msg)}
+                          className="p-1 bg-blue-500 text-white rounded hover:bg-blue-600"
+                          title="Edit message"
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          onClick={() => handleDelete(msg.id)}
+                          className="p-1 bg-red-500 text-white rounded hover:bg-red-600"
+                          title="Delete message"
+                        >
+                          🗑️
+                        </button>
+                      </div>
                     )}
-                    <p className="break-words">{msg.text}</p>
-                    <p className="text-xs opacity-60 mt-1">
-                      {new Date(msg.timestamp).toLocaleTimeString([], { 
-                        hour: '2-digit', 
-                        minute: '2-digit' 
-                      })}
-                    </p>
                   </div>
                   
                   {/* Reactions */}
