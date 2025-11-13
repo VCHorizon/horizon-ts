@@ -13,15 +13,17 @@ const generateGuestName = (): string => {
 export default function WelcomePage() {
   const [inputUsername, setInputUsername] = useState("");
   const [error, setError] = useState("");
-  const { username, setUsername } = useUsername();
+  const [isReturningUser, setIsReturningUser] = useState(false);
+  const { username, setUsername, clearUsername } = useUsername();
   const router = useRouter();
 
-  // Redirect to chat if username already exists
+  // Check if user is returning (has username in storage)
   useEffect(() => {
     if (username) {
-      router.push("/chat");
+      setIsReturningUser(true);
+      setInputUsername(username);
     }
-  }, [username, router]);
+  }, [username]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,10 +65,10 @@ export default function WelcomePage() {
       <div className="w-full max-w-md p-8 bg-white dark:bg-gray-800 rounded-2xl shadow-2xl">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-gray-800 dark:text-white mb-2">
-            Welcome to Horizon Chat
+            {isReturningUser ? 'Welcome Back!' : 'Welcome to Horizon Chat'}
           </h1>
           <p className="text-gray-600 dark:text-gray-300">
-            Choose a username to get started
+            {isReturningUser ? 'Continue with your username or choose a new one' : 'Choose a username to get started'}
           </p>
         </div>
 
@@ -125,6 +127,20 @@ export default function WelcomePage() {
           >
             Continue as Guest
           </button>
+          
+          {isReturningUser && (
+            <button
+              type="button"
+              onClick={() => {
+                clearUsername();
+                setInputUsername("");
+                setIsReturningUser(false);
+              }}
+              className="w-full px-6 py-3 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors duration-200"
+            >
+              Start fresh with a new username
+            </button>
+          )}
         </form>
       </div>
     </div>
