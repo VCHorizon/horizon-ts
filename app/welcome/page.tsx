@@ -38,7 +38,7 @@ export default function WelcomePage() {
       setError("Username must be at least 2 characters long");
       return;
     } else if (trimmedUsername.length > 20) {
-      setError("Username must be less than 20 characters");
+      setError("Username must be 20 characters or less");
       return;
     } else {
       setError("");
