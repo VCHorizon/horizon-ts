@@ -13,15 +13,31 @@ const io = new Server(httpServer, {
 
 const PORT = process.env.PORT || 3001;
 
+interface Reaction {
+  emoji: string;
+  users: string[];
+}
+
 interface ChatMessage {
+  id: string;
   username: string;
   text: string;
   timestamp: string;
+  reactions: Reaction[];
 }
 
 interface UserJoinedPayload {
   username: string;
 }
+
+interface ReactionPayload {
+  messageId: string;
+  emoji: string;
+  username: string;
+}
+
+// Store messages in memory for reaction tracking
+const messages = new Map<string, ChatMessage>();
 
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
@@ -38,11 +54,51 @@ io.on('connection', (socket) => {
   // Handle chat messages
   socket.on('chat:message', (message: ChatMessage) => {
     console.log('Message received:', message);
-    // Broadcast to all clients including sender
-    io.emit('chat:message', {
+    const messageWithTimestamp = {
       ...message,
       timestamp: new Date().toISOString(),
-    });
+      reactions: message.reactions || [],
+    };
+    // Store message for reaction tracking
+    messages.set(message.id, messageWithTimestamp);
+    // Broadcast to all clients including sender
+    io.emit('chat:message', messageWithTimestamp);
+  });
+  
+  // Handle message reactions
+  socket.on('message:reaction', (payload: ReactionPayload) => {
+    console.log('Reaction received:', payload);
+    const message = messages.get(payload.messageId);
+    
+    if (message) {
+      // Find existing reaction for this emoji
+      const existingReaction = message.reactions.find(r => r.emoji === payload.emoji);
+      
+      if (existingReaction) {
+        // Toggle: if user already reacted, remove them; otherwise add them
+        if (existingReaction.users.includes(payload.username)) {
+          existingReaction.users = existingReaction.users.filter(u => u !== payload.username);
+          // Remove reaction if no users left
+          if (existingReaction.users.length === 0) {
+            message.reactions = message.reactions.filter(r => r.emoji !== payload.emoji);
+          }
+        } else {
+          existingReaction.users.push(payload.username);
+        }
+      } else {
+        // Add new reaction
+        message.reactions.push({
+          emoji: payload.emoji,
+          users: [payload.username],
+        });
+      }
+      
+      // Broadcast updated message to all clients
+      io.emit('message:reaction:update', {
+        messageId: payload.messageId,
+        reactions: message.reactions,
+      });
+    }
   });
   
   // Handle user disconnect

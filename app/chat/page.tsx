@@ -5,10 +5,17 @@ import { useRouter } from "next/navigation";
 import { useUsername } from "../context/UsernameContext";
 import { io, Socket } from "socket.io-client";
 
+interface Reaction {
+  emoji: string;
+  users: string[];
+}
+
 interface Message {
+  id: string;
   username: string;
   text: string;
   timestamp: string;
+  reactions: Reaction[];
 }
 
 export default function ChatPage() {
@@ -22,7 +29,9 @@ export default function ChatPage() {
 
   // Auto-scroll to bottom when new messages arrive
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (messagesEndRef.current && typeof messagesEndRef.current.scrollIntoView === 'function') {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
   };
 
   useEffect(() => {
@@ -80,12 +89,24 @@ export default function ChatPage() {
       setMessages((prev) => [...prev, msg]);
     });
 
+    socket.on('message:reaction:update', (data: { messageId: string; reactions: Reaction[] }) => {
+      setMessages((prev) => 
+        prev.map(msg => 
+          msg.id === data.messageId 
+            ? { ...msg, reactions: data.reactions }
+            : msg
+        )
+      );
+    });
+
     socket.on('user:joined', (data: { username: string; timestamp: string }) => {
       // Add system message when user joins
       setMessages((prev) => [...prev, {
+        id: `system-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
         username: 'System',
         text: `${data.username} joined the chat`,
-        timestamp: data.timestamp
+        timestamp: data.timestamp,
+        reactions: []
       }]);
     });
 
@@ -100,9 +121,11 @@ export default function ChatPage() {
     
     if (message.trim() && username && socketRef.current?.connected) {
       const chatMessage: Message = {
+        id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         username,
         text: message.trim(),
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        reactions: []
       };
       
       socketRef.current.emit('chat:message', chatMessage);
@@ -181,30 +204,69 @@ export default function ChatPage() {
           ) : (
             messages.map((msg, index) => (
               <div
-                key={index}
+                key={msg.id || index}
                 className={`flex ${msg.username === username ? "justify-end" : msg.username === 'System' ? "justify-center" : "justify-start"}`}
               >
-                <div
-                  className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                    msg.username === 'System'
-                      ? "bg-gray-300 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm italic"
-                      : msg.username === username
-                      ? "bg-indigo-600 text-white"
-                      : "bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                  }`}
-                >
-                  {msg.username !== 'System' && (
-                    <p className="text-xs font-semibold mb-1 opacity-75">
-                      {msg.username}
+                <div className="flex flex-col">
+                  <div
+                    className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                      msg.username === 'System'
+                        ? "bg-gray-300 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm italic"
+                        : msg.username === username
+                        ? "bg-indigo-600 text-white"
+                        : "bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                    }`}
+                  >
+                    {msg.username !== 'System' && (
+                      <p className="text-xs font-semibold mb-1 opacity-75">
+                        {msg.username}
+                      </p>
+                    )}
+                    <p className="break-words">{msg.text}</p>
+                    <p className="text-xs opacity-60 mt-1">
+                      {new Date(msg.timestamp).toLocaleTimeString([], { 
+                        hour: '2-digit', 
+                        minute: '2-digit' 
+                      })}
                     </p>
+                  </div>
+                  
+                  {/* Reactions */}
+                  {msg.username !== 'System' && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {/* Existing reactions */}
+                      {msg.reactions.map((reaction) => (
+                        <button
+                          key={reaction.emoji}
+                          onClick={() => handleReaction(msg.id, reaction.emoji)}
+                          className={`text-sm px-2 py-1 rounded-full border transition-colors ${
+                            reaction.users.includes(username || '')
+                              ? 'bg-indigo-100 dark:bg-indigo-900 border-indigo-400 dark:border-indigo-600'
+                              : 'bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600'
+                          }`}
+                          title={reaction.users.join(', ')}
+                        >
+                          {reaction.emoji} {reaction.users.length}
+                        </button>
+                      ))}
+                      
+                      {/* Quick reaction buttons */}
+                      {['👍', '❤️', '😂', '🎉'].map((emoji) => {
+                        const hasReaction = msg.reactions.some(r => r.emoji === emoji);
+                        if (hasReaction) return null;
+                        return (
+                          <button
+                            key={emoji}
+                            onClick={() => handleReaction(msg.id, emoji)}
+                            className="text-sm px-2 py-1 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 opacity-60 hover:opacity-100 transition-all"
+                            title={`React with ${emoji}`}
+                          >
+                            {emoji}
+                          </button>
+                        );
+                      })}
+                    </div>
                   )}
-                  <p className="break-words">{msg.text}</p>
-                  <p className="text-xs opacity-60 mt-1">
-                    {new Date(msg.timestamp).toLocaleTimeString([], { 
-                      hour: '2-digit', 
-                      minute: '2-digit' 
-                    })}
-                  </p>
                 </div>
               </div>
             ))
