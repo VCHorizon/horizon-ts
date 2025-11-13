@@ -141,14 +141,25 @@ export default function ChatPage() {
     router.push("/welcome");
   };
 
-  const handleReaction = (messageId: string, emoji: string) => {
-    if (socketRef.current?.connected && username) {
-      socketRef.current.emit('message:reaction', {
-        messageId,
-        emoji,
-        username
-      });
-    }
+  const handleEmojiSelect = (emoji: string) => {
+    const input = inputRef.current;
+    if (!input) return;
+
+    const start = input.selectionStart || 0;
+    const end = input.selectionEnd || 0;
+    const textBefore = message.substring(0, start);
+    const textAfter = message.substring(end);
+    const newMessage = textBefore + emoji + textAfter;
+    
+    setMessage(newMessage);
+    setShowEmojiPicker(false);
+    
+    // Set cursor position after emoji
+    setTimeout(() => {
+      input.focus();
+      const newCursorPos = start + emoji.length;
+      input.setSelectionRange(newCursorPos, newCursorPos);
+    }, 0);
   };
 
   if (!username) {
